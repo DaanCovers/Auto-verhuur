@@ -1,0 +1,228 @@
+import React, { useState } from 'react';
+
+const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const TAX_RATE = 0.06;
+
+const RentalCalculator = () => {
+  const [cars, setCars] = useState([
+    { id: 1, name: 'White Jeep Wrangler', yearlyRentals: months.map(() => ({ rentals: [] })), daanShare: 40, gielJeroenShare: 60 },
+    { id: 2, name: 'Mitsubishi L200 Grey', yearlyRentals: months.map(() => ({ rentals: [] })), daanShare: 30, gielJeroenShare: 70 }
+  ]);
+  const [costs, setCosts] = useState(months.map(() => []));
+  const [selectedCarId, setSelectedCarId] = useState(1);
+  const [selectedMonth, setSelectedMonth] = useState(0);
+
+  const selectedCar = cars.find(car => car.id === selectedCarId) || cars[0];
+  const selectedMonthData = selectedCar.yearlyRentals[selectedMonth];
+
+  const updateState = (setter) => (id, field, value) => {
+    setter(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+
+  const addItem = (setter, initialState) => () => {
+    setter(prev => [...prev, { id: Math.max(...prev.map(item => item.id), 0) + 1, ...initialState }]);
+  };
+
+  const deleteItem = (setter) => (id) => {
+    setter(prev => prev.filter(item => item.id !== id));
+  };
+
+  const deleteCar = (id) => {
+    setCars(prev => prev.filter(car => car.id !== id));
+    if (selectedCarId === id) {
+      setSelectedCarId(cars.find(car => car.id !== id)?.id || 0);
+    }
+  };
+
+  const updateRental = (carId, monthIndex, rentalIndex, field, value) => {
+    setCars(cars.map(car =>
+      car.id === carId
+        ? {
+            ...car,
+            yearlyRentals: car.yearlyRentals.map((monthData, mIndex) =>
+              mIndex === monthIndex
+                ? {
+                    ...monthData,
+                    rentals: monthData.rentals.map((rental, rIndex) =>
+                      rIndex === rentalIndex ? { ...rental, [field]: value } : rental
+                    )
+                  }
+                : monthData
+            )
+          }
+        : car
+    ));
+  };
+
+  const addCost = () => {
+    setCosts(prevCosts => {
+      const newCosts = [...prevCosts];
+      newCosts[selectedMonth] = [...newCosts[selectedMonth], { id: Date.now(), description: '', amount: 0 }];
+      return newCosts;
+    });
+  };
+
+  const updateCost = (id, field, value) => {
+    setCosts(prevCosts => {
+      const newCosts = [...prevCosts];
+      newCosts[selectedMonth] = newCosts[selectedMonth].map(cost =>
+        cost.id === id ? { ...cost, [field]: value } : cost
+      );
+      return newCosts;
+    });
+  };
+
+  const deleteCost = (id) => {
+    setCosts(prevCosts => {
+      const newCosts = [...prevCosts];
+      newCosts[selectedMonth] = newCosts[selectedMonth].filter(cost => cost.id !== id);
+      return newCosts;
+    });
+  };
+
+  const calculateTotals = () => {
+    const totalCosts = costs[selectedMonth].reduce((sum, cost) => sum + Number(cost.amount), 0);
+    return cars.reduce((totals, car) => {
+      const carRevenue = car.yearlyRentals[selectedMonth].rentals.reduce((sum, rental) =>
+        sum + Number(rental.revenue), 0);
+      const carRevenueAfterTax = carRevenue * (1 - TAX_RATE);
+      const daanShare = (carRevenueAfterTax * car.daanShare) / 100;
+      const gielJeroenShare = (carRevenueAfterTax * car.gielJeroenShare) / 100;
+
+      totals.totalRevenue += carRevenueAfterTax;
+      totals.totalDaanShare += daanShare;
+      totals.totalGielJeroenShare += gielJeroenShare;
+      totals.carTotals.push({ name: car.name, revenue: carRevenueAfterTax, daanShare, gielJeroenShare });
+
+      return totals;
+    }, { carTotals: [], totalRevenue: 0, totalDaanShare: 0, totalGielJeroenShare: 0, totalCosts });
+  };
+
+  const calculateMonthlyGielJeroenRevenue = () => {
+    const monthlyRevenue = cars.reduce((sum, car) => {
+      const monthRevenue = car.yearlyRentals[selectedMonth].rentals.reduce((monthSum, rental) =>
+        monthSum + Number(rental.revenue), 0);
+      const monthRevenueAfterTax = monthRevenue * (1 - TAX_RATE);
+      return sum + (monthRevenueAfterTax * car.gielJeroenShare) / 100;
+    }, 0);
+    const monthlyCosts = costs[selectedMonth].reduce((sum, cost) => sum + Number(cost.amount), 0);
+    return monthlyRevenue - monthlyCosts;
+  };
+
+  const totals = calculateTotals();
+  const monthlyGielJeroenRevenue = calculateMonthlyGielJeroenRevenue();
+
+  return (
+    <div className="p-4 space-y-4">
+      <div className="space-y-4">
+        <div className="flex space-x-4">
+          <div className="flex-1">
+            <label htmlFor="car-select">Select Car</label>
+            <select id="car-select" value={selectedCarId} onChange={(e) => setSelectedCarId(Number(e.target.value))}>
+              {cars.map(car => (
+                <option key={car.id} value={car.id}>{car.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label htmlFor="month-select">Select Month</label>
+            <select id="month-select" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
+              {months.map((month, index) => (
+                <option key={index} value={index}>{month}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex space-x-2">
+          <button onClick={addItem(setCars, { name: `Car ${cars.length + 1}`, yearlyRentals: months.map(() => ({ rentals: [] })), daanShare: 30, gielJeroenShare: 70 })}>Add New Car</button>
+          <button onClick={() => deleteCar(selectedCarId)} disabled={cars.length <= 1}>Delete Selected Car</button>
+        </div>
+
+        {selectedCar && selectedMonthData && (
+          <div>
+            <h3>Rentals for {selectedCar.name} in {months[selectedMonth]}</h3>
+            {selectedMonthData.rentals.map((rental, index) => (
+              <div key={index} className="flex space-x-2 mb-2 items-center">
+                <input
+                  type="date"
+                  value={rental.startDate}
+                  onChange={(e) => updateRental(selectedCar.id, selectedMonth, index, 'startDate', e.target.value)}
+                  placeholder="Start Date"
+                />
+                <input
+                  type="date"
+                  value={rental.endDate}
+                  onChange={(e) => updateRental(selectedCar.id, selectedMonth, index, 'endDate', e.target.value)}
+                  placeholder="End Date"
+                />
+                <label>Revenue (incl. tax):</label>
+                <input
+                  type="number"
+                  value={rental.revenue}
+                  onChange={(e) => updateRental(selectedCar.id, selectedMonth, index, 'revenue', e.target.value)}
+                  placeholder="Enter revenue"
+                />
+                <button
+                  onClick={() => updateState(setCars)(selectedCar.id, 'yearlyRentals', selectedCar.yearlyRentals.map((monthData, mIndex) =>
+                    mIndex === selectedMonth ? { ...monthData, rentals: monthData.rentals.filter((_, rIndex) => rIndex !== index) } : monthData
+                  ))}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+            <button onClick={() => updateState(setCars)(selectedCar.id, 'yearlyRentals', selectedCar.yearlyRentals.map((monthData, mIndex) =>
+              mIndex === selectedMonth ? { ...monthData, rentals: [...monthData.rentals, { startDate: '', endDate: '', revenue: 0 }] } : monthData
+            ))}>Add Rental Period</button>
+          </div>
+        )}
+
+        <div>
+          <h3>Costs for {months[selectedMonth]}</h3>
+          {costs[selectedMonth].map((cost) => (
+            <div key={cost.id} className="flex space-x-2 mb-2 items-center">
+              <input
+                type="text"
+                value={cost.description}
+                onChange={(e) => updateCost(cost.id, 'description', e.target.value)}
+                placeholder="Description"
+              />
+              <input
+                type="number"
+                value={cost.amount}
+                onChange={(e) => updateCost(cost.id, 'amount', Number(e.target.value))}
+                placeholder="Amount"
+              />
+              <button
+                onClick={() => deleteCost(cost.id)}
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+          <button onClick={addCost}>Add Cost</button>
+        </div>
+
+        <div>
+          <h3>Summary for {months[selectedMonth]} (After 6% Tax Deduction)</h3>
+          {totals.carTotals.map((carTotal, index) => (
+            <div key={index} className="mb-2">
+              <h4>{carTotal.name}</h4>
+              <p>Net Revenue: ${carTotal.revenue.toFixed(2)}</p>
+              <p>Daan's Share: ${carTotal.daanShare.toFixed(2)}</p>
+              <p>Giel and Jeroen's Share: ${carTotal.gielJeroenShare.toFixed(2)}</p>
+            </div>
+          ))}
+          <p className="font-semibold mt-4">Monthly Totals:</p>
+          <p>Total Net Revenue: ${totals.totalRevenue.toFixed(2)}</p>
+          <p>Daan's Total Share: ${totals.totalDaanShare.toFixed(2)}</p>
+          <p>Giel and Jeroen's Total Share: ${totals.totalGielJeroenShare.toFixed(2)}</p>
+          <p>Total Costs: ${totals.totalCosts.toFixed(2)}</p>
+          <p>Giel and Jeroen's Net Profit: ${monthlyGielJeroenRevenue.toFixed(2)}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default RentalCalculator;
